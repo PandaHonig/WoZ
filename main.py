@@ -9,10 +9,10 @@ from typing import Callable, Dict, List, Optional
 
 @dataclass
 class ContextParameters:
-    target_person: str = "Surgeon"
-    instrument_type: str = "Forceps"
+    target_person: str = "Chirurgie"
+    instrument_type: str = "Pinzette"
     urgency_level: str = "Normal"
-    side_direction: str = "Center"
+    side_direction: str = "Mitte"
     speed_profile: str = "Standard"
 
 
@@ -75,7 +75,7 @@ class EventLogger:
 
 
 class RobotSimulator:
-    VALID_STATES = ["idle", "ready", "executing", "paused", "error", "emergency stop"]
+    VALID_STATES = ["idle", "ready", "executing", "paused", "fehler", "emergency stop"]
 
     def __init__(self, on_state_change: Callable[[], None], logger: EventLogger):
         self.state = "ready"
@@ -92,7 +92,7 @@ class RobotSimulator:
         self._tk_root = root
 
     def select_and_queue(self, request: ActionRequest) -> None:
-        if self.state in {"error", "emergency stop"}:
+        if self.state in {"fehler", "emergency stop"}:
             return
         if self.current_action is None:
             self.queue.insert(0, request)
@@ -101,7 +101,7 @@ class RobotSimulator:
         self.on_state_change()
 
     def execute_next(self, scenario: str, mode: str) -> None:
-        if self.state in {"error", "emergency stop"}:
+        if self.state in {"fehler", "emergency stop"}:
             return
         if self.current_action is not None or not self.queue:
             return
@@ -111,7 +111,7 @@ class RobotSimulator:
         latency_ms = (self._execution_started_at - self.current_action.selected_at) * 1000
         duration_ms = self._estimate_duration_ms(self.current_action)
         self.logger.log(
-            "action_execution",
+            "aktion_ausführung",
             self._describe_action(self.current_action),
             scenario=scenario,
             mode=mode,
@@ -129,7 +129,7 @@ class RobotSimulator:
         desc = self._describe_action(self.current_action)
         self.completed.insert(0, f"{self.current_action.action} ({duration_ms:.0f}ms)")
         self.completed = self.completed[:8]
-        self.logger.log("action_completed", desc, scenario=scenario, mode=mode, duration_ms=duration_ms)
+        self.logger.log("aktion_abgeschlossen", desc, scenario=scenario, mode=mode, duration_ms=duration_ms)
         self.current_action = None
         self.state = "ready"
         self._after_token = None
@@ -140,24 +140,24 @@ class RobotSimulator:
             if self._tk_root is not None and self._after_token is not None:
                 self._tk_root.after_cancel(self._after_token)
             desc = self._describe_action(self.current_action)
-            self.logger.log("action_cancelled", desc, scenario=scenario, mode=mode)
+            self.logger.log("aktion_abgebrochen", desc, scenario=scenario, mode=mode)
             self.current_action = None
             self.state = "ready"
             self._after_token = None
             self.on_state_change()
 
-    def emergency_stop(self, scenario: str, mode: str) -> None:
+    def not_halt(self, scenario: str, mode: str) -> None:
         if self._tk_root is not None and self._after_token is not None:
             self._tk_root.after_cancel(self._after_token)
         self._after_token = None
         self.state = "emergency stop"
         self.current_action = None
-        self.logger.log("emergency_stop", "Emergency stop engaged", scenario=scenario, mode=mode)
+        self.logger.log("not_halt", "Not-Halt aktiviert", scenario=scenario, mode=mode)
         self.on_state_change()
 
-    def set_error(self, message: str, scenario: str, mode: str) -> None:
-        self.state = "error"
-        self.logger.log("error", message, scenario=scenario, mode=mode)
+    def set_fehler(self, message: str, scenario: str, mode: str) -> None:
+        self.state = "fehler"
+        self.logger.log("fehler", message, scenario=scenario, mode=mode)
         self.on_state_change()
 
     def reset(self, scenario: str, mode: str) -> None:
@@ -166,27 +166,27 @@ class RobotSimulator:
         self._after_token = None
         self.state = "ready"
         self.current_action = None
-        self.logger.log("state_reset", "Robot state reset", scenario=scenario, mode=mode)
+        self.logger.log("status_zurückgesetzt", "Roboterstatus zurückgesetzt", scenario=scenario, mode=mode)
         self.on_state_change()
 
     def clear_queue(self, scenario: str, mode: str) -> None:
         self.queue.clear()
-        self.logger.log("queue_cleared", "Pending queue cleared", scenario=scenario, mode=mode)
+        self.logger.log("warteschlange_geleert", "Ausstehende Warteschlange geleert", scenario=scenario, mode=mode)
         self.on_state_change()
 
     @staticmethod
     def _estimate_duration_ms(request: ActionRequest) -> int:
         base = {
-            "Handover item": 2400,
-            "Move to standby": 1300,
-            "Approach operator": 1600,
-            "Retract / retreat": 1500,
-            "Hold position": 800,
-            "Return to safe pose": 1800,
-            "Cancel current action": 500,
+            "Instrument übergeben": 2400,
+            "In Bereitschaft fahren": 1300,
+            "Zur Bedienperson fahren": 1600,
+            "Zurückziehen / zurückfahren": 1500,
+            "Position halten": 800,
+            "In sichere Pose fahren": 1800,
+            "Aktuelle Aktion abbrechen": 500,
         }.get(request.action, 1200)
-        urgency_mod = {"Low": 200, "Normal": 0, "High": -250, "Critical": -500}
-        speed_mod = {"Slow": 300, "Standard": 0, "Fast": -300}
+        urgency_mod = {"Niedrig": 200, "Normal": 0, "Hoch": -250, "Kritisch": -500}
+        speed_mod = {"Langsam": 300, "Standard": 0, "Schnell": -300}
         return max(400, base + urgency_mod.get(request.params.urgency_level, 0) + speed_mod.get(request.params.speed_profile, 0))
 
     @staticmethod
@@ -200,20 +200,20 @@ class RobotSimulator:
 
 class WoZApp(tk.Tk):
     ACTION_CATEGORIES: Dict[str, List[str]] = {
-        "Primary": ["Handover item", "Approach operator", "Move to standby"],
-        "Positioning": ["Retract / retreat", "Hold position", "Return to safe pose"],
-        "Control": ["Cancel current action"],
+        "Primär": ["Instrument übergeben", "Zur Bedienperson fahren", "In Bereitschaft fahren"],
+        "Positionierung": ["Zurückziehen / zurückfahren", "Position halten", "In sichere Pose fahren"],
+        "Steuerung": ["Aktuelle Aktion abbrechen"],
     }
 
     def __init__(self):
         super().__init__()
-        self.title("WoZ Medical Assistive Arm Wizard Interface (Prototype)")
+        self.title("WoZ-Assistentenarm Zauberer-Oberfläche (Prototyp)")
         self.geometry("1400x860")
         self.minsize(1200, 760)
 
         self.logger = EventLogger()
-        self.mode_var = tk.StringVar(value="Study")
-        self.selected_action_var = tk.StringVar(value="No action selected")
+        self.mode_var = tk.StringVar(value="Studie")
+        self.selected_action_var = tk.StringVar(value="Keine Aktion ausgewählt")
         self.status_var = tk.StringVar(value="ready")
 
         self.context = ContextParameters()
@@ -235,22 +235,22 @@ class WoZApp(tk.Tk):
     def _build_scenarios(self) -> List[Scenario]:
         return [
             Scenario(
-                "Simple handover",
-                "Routine handover from standby to clinician and back.",
-                ContextParameters("Surgeon", "Scalpel", "Normal", "Right", "Standard"),
-                ["Approach operator", "Handover item", "Retract / retreat", "Move to standby"],
+                "Einfache Übergabe",
+                "Routine-Übergabe von Bereitschaft zur Fachkraft und zurück.",
+                ContextParameters("Chirurgie", "Skalpell", "Normal", "Rechts", "Standard"),
+                ["Zur Bedienperson fahren", "Instrument übergeben", "Zurückziehen / zurückfahren", "In Bereitschaft fahren"],
             ),
             Scenario(
-                "Interrupted handover",
-                "Start handover then cancel and return to safe posture.",
-                ContextParameters("Nurse", "Syringe", "High", "Left", "Fast"),
-                ["Approach operator", "Handover item", "Cancel current action", "Return to safe pose"],
+                "Unterbrochene Übergabe",
+                "Übergabe starten, dann abbrechen und in sichere Pose zurückkehren.",
+                ContextParameters("Pflegekraft", "Spritze", "Hoch", "Links", "Schnell"),
+                ["Zur Bedienperson fahren", "Instrument übergeben", "Aktuelle Aktion abbrechen", "In sichere Pose fahren"],
             ),
             Scenario(
-                "Urgent reprioritization",
-                "Urgent request arrives while managing current positioning.",
-                ContextParameters("Lead Surgeon", "Clamp", "Critical", "Center", "Fast"),
-                ["Hold position", "Cancel current action", "Approach operator", "Handover item"],
+                "Dringende Neupriorisierung",
+                "Dringende Anfrage während laufender Positionierung.",
+                ContextParameters("Leitende Chirurgie", "Klemme", "Kritisch", "Mitte", "Schnell"),
+                ["Position halten", "Aktuelle Aktion abbrechen", "Zur Bedienperson fahren", "Instrument übergeben"],
             ),
         ]
 
@@ -261,19 +261,19 @@ class WoZApp(tk.Tk):
         self.rowconfigure(0, weight=8)
         self.rowconfigure(1, weight=3)
 
-        left = ttk.LabelFrame(self, text="Live Control (Quick Actions)")
+        left = ttk.LabelFrame(self, text="Live-Steuerung (Schnellaktionen)")
         left.grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
         self._build_left_panel(left)
 
-        center = ttk.LabelFrame(self, text="Robot State & Execution")
+        center = ttk.LabelFrame(self, text="Roboterstatus & Ausführung")
         center.grid(row=0, column=1, sticky="nsew", padx=6, pady=6)
         self._build_center_panel(center)
 
-        right = ttk.LabelFrame(self, text="Scenario + Context + Mode")
+        right = ttk.LabelFrame(self, text="Szenario + Kontext + Modus")
         right.grid(row=0, column=2, sticky="nsew", padx=6, pady=6)
         self._build_right_panel(right)
 
-        bottom = ttk.LabelFrame(self, text="Event Logs")
+        bottom = ttk.LabelFrame(self, text="Ereignisprotokoll")
         bottom.grid(row=1, column=0, columnspan=3, sticky="nsew", padx=6, pady=6)
         self._build_bottom_panel(bottom)
 
@@ -290,8 +290,8 @@ class WoZApp(tk.Tk):
 
         ttk.Separator(parent, orient="horizontal").grid(row=row, column=0, sticky="ew", padx=6, pady=8)
         row += 1
-        self.emergency_btn = tk.Button(parent, text="EMERGENCY STOP (Space)", bg="#c62828", fg="white", font=("TkDefaultFont", 13, "bold"),
-                                       height=2, command=self.do_emergency_stop)
+        self.emergency_btn = tk.Button(parent, text="NOT-HALT (Leertaste)", bg="#c62828", fg="white", font=("TkDefaultFont", 13, "bold"),
+                                       height=2, command=self.do_not_halt)
         self.emergency_btn.grid(row=row, column=0, sticky="ew", padx=6, pady=6)
         parent.columnconfigure(0, weight=1)
 
@@ -300,66 +300,66 @@ class WoZApp(tk.Tk):
             parent.rowconfigure(i, weight=0)
         parent.columnconfigure(0, weight=1)
 
-        ttk.Label(parent, text="State:", font=("TkDefaultFont", 11, "bold")).grid(row=0, column=0, sticky="w", padx=8, pady=(10, 3))
+        ttk.Label(parent, text="Status:", font=("TkDefaultFont", 11, "bold")).grid(row=0, column=0, sticky="w", padx=8, pady=(10, 3))
         self.state_label = ttk.Label(parent, textvariable=self.status_var, font=("TkDefaultFont", 14, "bold"), foreground="green")
         self.state_label.grid(row=1, column=0, sticky="w", padx=8)
 
-        ttk.Label(parent, text="Selected action:", font=("TkDefaultFont", 10, "bold")).grid(row=2, column=0, sticky="w", padx=8, pady=(12, 3))
+        ttk.Label(parent, text="Ausgewählte Aktion:", font=("TkDefaultFont", 10, "bold")).grid(row=2, column=0, sticky="w", padx=8, pady=(12, 3))
         ttk.Label(parent, textvariable=self.selected_action_var, wraplength=520).grid(row=3, column=0, sticky="w", padx=8)
 
         button_row = ttk.Frame(parent)
         button_row.grid(row=4, column=0, sticky="ew", padx=8, pady=8)
         button_row.columnconfigure((0, 1, 2), weight=1)
-        ttk.Button(button_row, text="Confirm / Execute (Enter)", command=self.confirm_and_execute).grid(row=0, column=0, sticky="ew", padx=2)
-        ttk.Button(button_row, text="Cancel Current", command=self.cancel_current).grid(row=0, column=1, sticky="ew", padx=2)
-        ttk.Button(button_row, text="Inject Error", command=self.inject_error).grid(row=0, column=2, sticky="ew", padx=2)
+        ttk.Button(button_row, text="Bestätigen / Ausführen (Enter)", command=self.confirm_and_execute).grid(row=0, column=0, sticky="ew", padx=2)
+        ttk.Button(button_row, text="Laufende Aktion abbrechen", command=self.cancel_current).grid(row=0, column=1, sticky="ew", padx=2)
+        ttk.Button(button_row, text="Fehler simulieren", command=self.inject_fehler).grid(row=0, column=2, sticky="ew", padx=2)
 
-        queue_frame = ttk.LabelFrame(parent, text="Queued / Current / Completed")
+        queue_frame = ttk.LabelFrame(parent, text="Warteschlange / Aktuell / Abgeschlossen")
         queue_frame.grid(row=5, column=0, sticky="nsew", padx=8, pady=6)
         queue_frame.columnconfigure((0, 1, 2), weight=1)
 
-        self.current_lbl = ttk.Label(queue_frame, text="Current: -", wraplength=180)
+        self.current_lbl = ttk.Label(queue_frame, text="Aktuell: -", wraplength=180)
         self.current_lbl.grid(row=0, column=0, sticky="nw", padx=5, pady=4)
-        self.queue_lbl = ttk.Label(queue_frame, text="Queue: -", wraplength=180)
+        self.queue_lbl = ttk.Label(queue_frame, text="Warteschlange: -", wraplength=180)
         self.queue_lbl.grid(row=0, column=1, sticky="nw", padx=5, pady=4)
-        self.completed_lbl = ttk.Label(queue_frame, text="Completed: -", wraplength=220)
+        self.completed_lbl = ttk.Label(queue_frame, text="Abgeschlossen: -", wraplength=220)
         self.completed_lbl.grid(row=0, column=2, sticky="nw", padx=5, pady=4)
 
         safety_frame = ttk.Frame(parent)
         safety_frame.grid(row=6, column=0, sticky="ew", padx=8, pady=(8, 4))
-        ttk.Button(safety_frame, text="Clear Queue", command=self.clear_queue).pack(side="left", padx=2)
-        ttk.Button(safety_frame, text="Return to Safe Pose", command=lambda: self.select_action("Return to safe pose")).pack(side="left", padx=2)
-        ttk.Button(safety_frame, text="Reset Robot State", command=self.reset_robot).pack(side="left", padx=2)
+        ttk.Button(safety_frame, text="Warteschlange leeren", command=self.clear_queue).pack(side="left", padx=2)
+        ttk.Button(safety_frame, text="Zur sicheren Pose", command=lambda: self.select_action("In sichere Pose fahren")).pack(side="left", padx=2)
+        ttk.Button(safety_frame, text="Roboterstatus zurücksetzen", command=self.reset_robot).pack(side="left", padx=2)
 
     def _build_right_panel(self, parent):
         parent.columnconfigure(0, weight=1)
 
-        mode_frame = ttk.LabelFrame(parent, text="Mode")
+        mode_frame = ttk.LabelFrame(parent, text="Modus")
         mode_frame.grid(row=0, column=0, sticky="ew", padx=6, pady=6)
-        ttk.Radiobutton(mode_frame, text="Study", variable=self.mode_var, value="Study", command=self.on_mode_changed).pack(anchor="w", padx=4, pady=2)
-        ttk.Radiobutton(mode_frame, text="Training", variable=self.mode_var, value="Training", command=self.on_mode_changed).pack(anchor="w", padx=4, pady=2)
+        ttk.Radiobutton(mode_frame, text="Studie", variable=self.mode_var, value="Studie", command=self.on_modus_geändert).pack(anchor="w", padx=4, pady=2)
+        ttk.Radiobutton(mode_frame, text="Training", variable=self.mode_var, value="Training", command=self.on_modus_geändert).pack(anchor="w", padx=4, pady=2)
 
-        sc_frame = ttk.LabelFrame(parent, text="Scenarios")
+        sc_frame = ttk.LabelFrame(parent, text="Szenarien")
         sc_frame.grid(row=1, column=0, sticky="ew", padx=6, pady=6)
         names = [s.name for s in self.scenarios]
         combo = ttk.Combobox(sc_frame, values=names, textvariable=self.scenario_var, state="readonly")
         combo.pack(fill="x", padx=5, pady=4)
         combo.bind("<<ComboboxSelected>>", lambda e: self.load_scenario(self.scenario_var.get()))
-        ttk.Button(sc_frame, text="Reload Scenario", command=lambda: self.load_scenario(self.scenario_var.get())).pack(fill="x", padx=5, pady=3)
+        ttk.Button(sc_frame, text="Szenario neu laden", command=lambda: self.load_scenario(self.scenario_var.get())).pack(fill="x", padx=5, pady=3)
 
         self.scenario_desc_lbl = ttk.Label(sc_frame, text="", wraplength=340, foreground="#333")
         self.scenario_desc_lbl.pack(fill="x", padx=5, pady=4)
         self.recommended_text = tk.Text(sc_frame, height=5, wrap="word", state="disabled")
         self.recommended_text.pack(fill="x", padx=5, pady=4)
 
-        ctx = ttk.LabelFrame(parent, text="Context Parameters")
+        ctx = ttk.LabelFrame(parent, text="Kontextparameter")
         ctx.grid(row=2, column=0, sticky="nsew", padx=6, pady=6)
         fields = {
-            "target_person": ["Surgeon", "Nurse", "Lead Surgeon", "Resident"],
-            "instrument_type": ["Forceps", "Scalpel", "Syringe", "Clamp", "Swab"],
-            "urgency_level": ["Low", "Normal", "High", "Critical"],
-            "side_direction": ["Left", "Right", "Center"],
-            "speed_profile": ["Slow", "Standard", "Fast"],
+            "target_person": ["Chirurgie", "Pflegekraft", "Leitende Chirurgie", "Assistenzarzt/-ärztin"],
+            "instrument_type": ["Pinzette", "Skalpell", "Spritze", "Klemme", "Tupfer"],
+            "urgency_level": ["Niedrig", "Normal", "Hoch", "Kritisch"],
+            "side_direction": ["Links", "Rechts", "Mitte"],
+            "speed_profile": ["Langsam", "Standard", "Schnell"],
         }
         for i, (name, options) in enumerate(fields.items()):
             ttk.Label(ctx, text=name.replace("_", " ").title()).grid(row=i, column=0, sticky="w", padx=4, pady=3)
@@ -377,16 +377,16 @@ class WoZApp(tk.Tk):
         self.log_text.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         controls = ttk.Frame(parent)
         controls.grid(row=1, column=0, sticky="ew", padx=5, pady=(0, 5))
-        ttk.Button(controls, text="Export CSV", command=self.export_logs).pack(side="left")
-        ttk.Button(controls, text="Clear Log View", command=self.clear_log_view).pack(side="left", padx=4)
+        ttk.Button(controls, text="CSV exportieren", command=self.export_logs).pack(side="left")
+        ttk.Button(controls, text="Protokollansicht leeren", command=self.clear_log_view).pack(side="left", padx=4)
 
     def _bind_shortcuts(self):
         self.bind("<Return>", lambda e: self.confirm_and_execute())
-        self.bind("<space>", lambda e: self.do_emergency_stop())
-        self.bind("1", lambda e: self.select_action("Handover item"))
-        self.bind("2", lambda e: self.select_action("Approach operator"))
-        self.bind("3", lambda e: self.select_action("Move to standby"))
-        self.bind("4", lambda e: self.select_action("Return to safe pose"))
+        self.bind("<space>", lambda e: self.do_not_halt())
+        self.bind("1", lambda e: self.select_action("Instrument übergeben"))
+        self.bind("2", lambda e: self.select_action("Zur Bedienperson fahren"))
+        self.bind("3", lambda e: self.select_action("In Bereitschaft fahren"))
+        self.bind("4", lambda e: self.select_action("In sichere Pose fahren"))
         self.bind("c", lambda e: self.cancel_current())
 
     def _current_mode(self) -> str:
@@ -400,12 +400,12 @@ class WoZApp(tk.Tk):
 
     def select_action(self, action: str):
         self.selected_action_var.set(action)
-        self.logger_and_view("action_selected", f"Selected action: {action}")
+        self.logger_and_view("aktion_ausgewählt", f"Ausgewählte Aktion: {action}")
 
     def confirm_and_execute(self):
         action = self.selected_action_var.get()
-        if action == "No action selected":
-            self.logger_and_view("warning", "Execute ignored: no action selected")
+        if action == "Keine Aktion ausgewählt":
+            self.logger_and_view("warnung", "Ausführung ignoriert: keine Aktion ausgewählt")
             return
         req = ActionRequest(action=action, params=self._get_context(), selected_at=time.time())
         self.robot.select_and_queue(req)
@@ -414,8 +414,8 @@ class WoZApp(tk.Tk):
     def cancel_current(self):
         self.robot.cancel_current(self._current_scenario(), self._current_mode())
 
-    def do_emergency_stop(self):
-        self.robot.emergency_stop(self._current_scenario(), self._current_mode())
+    def do_not_halt(self):
+        self.robot.not_halt(self._current_scenario(), self._current_mode())
 
     def clear_queue(self):
         self.robot.clear_queue(self._current_scenario(), self._current_mode())
@@ -423,14 +423,14 @@ class WoZApp(tk.Tk):
     def reset_robot(self):
         self.robot.reset(self._current_scenario(), self._current_mode())
 
-    def inject_error(self):
-        self.robot.set_error("Simulated fault condition for recovery drill", self._current_scenario(), self._current_mode())
+    def inject_fehler(self):
+        self.robot.set_fehler("Simulierter Fehlerzustand für Wiederherstellungsübung", self._current_scenario(), self._current_mode())
 
-    def on_mode_changed(self):
-        self.logger_and_view("mode_changed", f"Mode changed to {self._current_mode()}")
+    def on_modus_geändert(self):
+        self.logger_and_view("modus_geändert", f"Modus changed to {self._current_mode()}")
 
     def on_param_change(self, name: str):
-        self.logger_and_view("parameter_change", f"{name} -> {self.param_vars[name].get()}")
+        self.logger_and_view("parameter_änderung", f"{name} -> {self.param_vars[name].get()}")
 
     def load_scenario(self, scenario_name: str, initial: bool = False):
         s = next((x for x in self.scenarios if x.name == scenario_name), None)
@@ -444,10 +444,10 @@ class WoZApp(tk.Tk):
         self.recommended_text.delete("1.0", "end")
         self.recommended_text.insert("1.0", "Recommended flow:\n- " + "\n- ".join(s.recommended_actions))
         self.recommended_text.configure(state="disabled")
-        self.selected_action_var.set("No action selected")
+        self.selected_action_var.set("Keine Aktion ausgewählt")
         self.robot.clear_queue(self._current_scenario(), self._current_mode())
         self.robot.reset(self._current_scenario(), self._current_mode())
-        self.logger_and_view("scenario_start" if initial else "scenario_switched", f"Scenario loaded: {s.name}")
+        self.logger_and_view("szenario_start" if initial else "szenario_gewechselt", f"Szenario geladen: {s.name}")
 
     def logger_and_view(self, event_type: str, details: str):
         entry = self.logger.log(event_type, details, self._current_scenario(), self._current_mode())
@@ -456,7 +456,7 @@ class WoZApp(tk.Tk):
     def refresh_state(self):
         st = self.robot.state
         self.status_var.set(st)
-        color = {"ready": "green", "executing": "blue", "paused": "#bb6d00", "error": "#b71c1c", "emergency stop": "#c62828", "idle": "gray"}.get(st, "black")
+        color = {"ready": "green", "executing": "blue", "paused": "#bb6d00", "fehler": "#b71c1c", "emergency stop": "#c62828", "idle": "gray"}.get(st, "black")
         self.state_label.configure(foreground=color)
 
         cur = self.robot.current_action.action if self.robot.current_action else "-"
@@ -467,8 +467,8 @@ class WoZApp(tk.Tk):
         self.queue_lbl.configure(text=f"Queue: {q}")
         self.completed_lbl.configure(text=f"Completed:\n{done}")
 
-        if st in {"error", "emergency stop"}:
-            self.selected_action_var.set("No action selected")
+        if st in {"fehler", "emergency stop"}:
+            self.selected_action_var.set("Keine Aktion ausgewählt")
 
     def _append_log(self, entry: LogEntry):
         if self.log_text is None:

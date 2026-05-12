@@ -1,0 +1,58 @@
+WoZ-Prototyp Bedienungsanleitung (Deutsch)
+==========================================
+
+Zweck
+-----
+Diese Oberfläche ist ein Wizard-of-Oz Forschungsprototyp zur manuellen Steuerung
+simulierter Assistenzarm-Bewegungen in Studie/Training.
+
+Bereich 1: Linkes Panel – Live-Steuerung (Schnellaktionen)
+-----------------------------------------------------------
+- Primär / Positionierung / Steuerung: Gruppen mit großen Aktionsknöpfen für schnelle Bedienung.
+- NOT-HALT (Leertaste): sofortiger Sicherheitsstopp, jederzeit sichtbar.
+
+Bereich 2: Mittleres Panel – Roboterstatus & Ausführung
+-------------------------------------------------------
+- Status: zeigt den simulierten Zustand (z. B. ready, executing, error, emergency stop).
+- Ausgewählte Aktion: zeigt die vor der Ausführung gewählte Aktion.
+- Bestätigen / Ausführen: startet die ausgewählte Aktion mit aktuellen Kontextparametern.
+- Laufende Aktion abbrechen: stoppt aktuell laufende Ausführung.
+- Fehler simulieren: setzt den Simulator in einen Fehlerzustand für Recovery-Übungen.
+- Warteschlange / Aktuell / Abgeschlossen: Überblick über Sequenz und Historie.
+- Warteschlange leeren: entfernt ausstehende Aktionen.
+- Zur sicheren Pose: Schnellwahl für sichere Rückkehrbewegung.
+- Roboterstatus zurücksetzen: Recovery aus Fehler-/Not-Halt-Zustand.
+
+Bereich 3: Rechtes Panel – Szenario + Kontext + Modus
+------------------------------------------------------
+- Modus:
+  - Studie: strukturierter Ablauf für Versuchsdurchführung.
+  - Training: freieres Üben ohne strikten Szenariofokus.
+- Szenarien:
+  - Einfache Übergabe
+  - Unterbrochene Übergabe
+  - Dringende Neupriorisierung
+  Mit "Szenario neu laden" werden Standardparameter erneut gesetzt.
+- Kontextparameter:
+  - Zielperson
+  - Instrumententyp
+  - Dringlichkeit
+  - Seite/Richtung
+  - Geschwindigkeitsprofil
+  Diese Parameter beeinflussen Simulationsbeschreibung und Protokolleinträge.
+
+Bereich 4: Unteres Panel – Ereignisprotokoll
+---------------------------------------------
+- Zeigt Zeitstempel, Ereignisart, Details, Latenz und Dauer.
+- CSV exportieren: Export aller Logeinträge für Studienauswertung.
+- Protokollansicht leeren: leert nur die Anzeige, nicht die gespeicherten Daten im Logger.
+
+Tastenkürzel
+------------
+- Enter: Bestätigen / Ausführen
+- Leertaste: NOT-HALT
+- 1: Instrument übergeben
+- 2: Zur Bedienperson fahren
+- 3: In Bereitschaft fahren
+- 4: In sichere Pose fahren
+- c: Laufende Aktion abbrechen
